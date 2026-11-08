@@ -99,10 +99,18 @@ const API_BASE = location.hostname === "app.arksignal.pro" ? "https://api.arksig
 const REQUEST_TIMEOUT_MS = 10000;
 let paperInFlight = false;
 let paperTimer = null;
+let paperStopped = false;
+
+function stopPaper() {
+  paperStopped = true;
+  if (paperTimer) clearTimeout(paperTimer);
+  paperTimer = null;
+}
 
 async function api(path, asText=false) {
   const tg = getTg();
   if (!tg || !tg.initData) {
+    stopPaper();
     $("#authwarning").style.display = "block";
     throw new Error("401");
   }
@@ -114,6 +122,11 @@ async function api(path, asText=false) {
       headers: {"X-Telegram-Init-Data": tg.initData},
       signal: controller.signal
     });
+    if (r.status === 401 || r.status === 403) {
+      stopPaper();
+      $("#authwarning").style.display = "block";
+      throw new Error("401");
+    }
     if (!r.ok) throw new Error("HTTP " + r.status);
     return asText ? await r.text() : await r.json();
   } finally {
@@ -160,7 +173,7 @@ async function loadPremiums() {
 }
 
 async function loadAll() {
-  if (paperInFlight) return;
+  if (paperInFlight || paperStopped) return;
   const tg = getTg();
   if (!tg || !tg.initData) {
     $("#authwarning").style.display = "block";
@@ -191,7 +204,7 @@ async function loadAll() {
     } catch (e) { $("#killbanner").style.display = "none"; }
   } finally {
     paperInFlight = false;
-    paperTimer = setTimeout(loadAll, 60000);
+    if (!paperStopped && !document.hidden) paperTimer = setTimeout(loadAll, 60000);
   }
 }
 
@@ -262,8 +275,13 @@ async function loadExplain() {
 function bootPaper() {
   const tg = getTg();
   if (tg) { tg.ready(); tg.expand(); }
-  if (tg && tg.initData) loadAll();
-  else $("#authwarning").style.display = "block";
+  if (tg && tg.initData) {
+    paperStopped = false;
+    loadAll();
+  } else {
+    stopPaper();
+    $("#authwarning").style.display = "block";
+  }
 }
 const insideTelegram = location.hash.includes("tgWebAppData") || "TelegramWebviewProxy" in window;
 if (insideTelegram && !getTg()) {
