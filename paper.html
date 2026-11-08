@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<!-- ARK raw-asset deploy 2026-11-09 -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARK — Paper-слоты и спред-сканер</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --border:#30363d; --text:#e6edf3;
+          --dim:#8b949e; --green:#3fb950; --red:#f85149; --amber:#d29922; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:960px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:26px 0 10px; color:var(--dim); }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:18px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+          gap:12px; }
+  .card { background:var(--card); border:1px solid var(--border);
+          border-radius:12px; padding:16px; }
+  .card h3 { margin:0 0 10px; font-size:15px; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:20px;
+           font-size:12px; font-weight:600; }
+  .run { background:#12361b; color:var(--green); }
+  .halt { background:#4a1717; color:var(--red); }
+  .row { display:flex; justify-content:space-between; padding:3px 0;
+         font-size:14px; }
+  .row span:first-child { color:var(--dim); }
+  .pos { color:var(--green); } .neg { color:var(--red); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--border); }
+  th { color:var(--dim); font-weight:500; font-size:12px; }
+  .big { color:var(--amber); font-weight:700; }
+  .empty { color:var(--dim); padding:14px 0; }
+  #tokenbox { margin:14px 0; display:flex; gap:8px; }
+  #token { flex:1; background:var(--card); border:1px solid var(--border);
+           color:var(--text); border-radius:8px; padding:8px 10px; }
+  button { background:#1f6feb; color:#fff; border:0; border-radius:8px;
+           padding:8px 16px; cursor:pointer; }
+  a { color:#58a6ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ARK — Paper-слоты и спред-сканер</h1>
+  <div class="sub">Обновление каждые 60 сек · <a href="/tma/">← Основной дашборд</a>
+    · <a href="#" onclick="loadUat();return false">UAT-отчёт</a>
+    · <a href="#" onclick="loadExplain();return false">AI-копилот</a></div>
+  <div id="explainbox" class="card" style="display:none">
+    <b>AI-копилот «объясни сделку»</b>
+    <div id="explain" style="margin-top:8px;font-size:14px;white-space:pre-wrap"></div>
+  </div>
+  <div id="uatbox" class="card" style="display:none">
+    <pre id="uat" style="white-space:pre-wrap;font-size:12px"></pre>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <b>PAPER · READ-ONLY</b>
+    <div class="sub" style="margin:4px 0 0">Реальные сделки не выполняются. Биржевые ключи и API-токены здесь не вводятся.</div>
+    <div id="authwarning" class="empty" style="display:none">Откройте дашборд через ARK Bot в Telegram.</div>
+  </div>
+
+  <h2>Equity curve</h2>
+  <div class="card"><canvas id="eqcanvas" width="880" height="160"
+         style="width:100%;max-width:880px;height:160px"></canvas></div>
+
+  <h2>Paper-слоты</h2>
+  <div id="killbanner" class="card" style="display:none;border-color:#f85149">
+    <b style="color:#f85149">KILL-SWITCH АКТИВЕН</b>
+    <span id="killreason" style="display:block;margin-top:6px;font-size:13px"></span>
+  </div>
+  <div class="grid" id="slots"></div>
+
+  <h2>Ончейн-радар «почему сейчас»</h2>
+  <div class="card" id="radar"><span class="empty">Аномалий нет — рынок спокоен.</span></div>
+
+  <h2>Лидерборд стратегий</h2>
+  <div class="card">
+    <table id="lb">
+      <thead><tr><th>#</th><th>Стратегия</th><th>PF</th><th>DD</th><th>Сделки</th><th>Вердикт</th><th>Fork</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <h2>Спред-премии спот/фьючерс ≥ 2%</h2>
+  <div class="card">
+    <div id="scaninfo" class="sub"></div>
+    <table id="premiums">
+      <thead><tr><th>Пара</th><th>Спред</th><th>Спот</th><th>Фьюч</th><th>Издержки</th><th>Вердикт</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="noprem" class="empty" style="display:none">Премий выше порога сейчас нет — рынок в норме.</div>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const getTg = () => (window.Telegram && window.Telegram.WebApp) || null;
+const API_BASE = location.hostname === "app.arksignal.pro" ? "https://api.arksignal.pro" : "";
+const REQUEST_TIMEOUT_MS = 10000;
+let paperInFlight = false;
+let paperTimer = null;
+
+async function api(path, asText=false) {
+  const tg = getTg();
+  if (!tg || !tg.initData) {
+    $("#authwarning").style.display = "block";
+    throw new Error("401");
+  }
+  $("#authwarning").style.display = "none";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const r = await fetch(API_BASE + path, {
+      headers: {"X-Telegram-Init-Data": tg.initData},
+      signal: controller.signal
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return asText ? await r.text() : await r.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+const esc = v => String(v).replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = (v, d=2) => v === null || v === undefined ? "—" : Number(v).toFixed(d);
+
+async function loadSlots() {
+  const data = await api("/api/v1/paper/slots");
+  const names = {base: "Turtle · BTC/ETH/SOL (протокол)",
+                 expanded: "Turtle Expanded · 7 пар (наблюдение)",
+                 short: "Short-Turtle · фьючерс 1x (наблюдение)"};
+  const html = Object.entries(data.slots).map(([tag, s]) => {
+    const eqCls = s.equity >= 100 ? "pos" : "neg";
+    return `<div class="card">
+      <h3>${esc(names[tag] || tag)}
+        <span class="badge ${s.status === "RUNNING" ? "run" : "halt"}">${esc(s.status)}</span></h3>
+      <div class="row"><span>Equity</span><span class="${eqCls}"><b>${fmt(s.equity)}$</b></span></div>
+      <div class="row"><span>Profit Factor</span><span>${s.pf === null ? "—" : fmt(s.pf)}</span></div>
+      <div class="row"><span>Просадка от пика</span><span>${fmt(s.dd * 100, 1)}%</span></div>
+      <div class="row"><span>Сделки / Открытые</span><span>${s.trades} / ${s.open.length ? esc(s.open.join(", ")) : "нет"}</span></div>
+      <div class="row"><span>Выбывшие</span><span>${s.eliminated.length ? esc(s.eliminated.join(", ")) : "нет"}</span></div>
+      <div class="row"><span>Heartbeat</span><span>${s.heartbeat_age_min === null ? "—" : fmt(s.heartbeat_age_min, 0) + " мин назад"}</span></div>
+      <div class="row"><span>Старт</span><span>${esc(s.started)} UTC</span></div>
+    </div>`;
+  }).join("");
+  $("#slots").innerHTML = html || '<div class="empty">Слоты ещё не инициализированы.</div>';
+}
+
+async function loadPremiums() {
+  const data = await api("/api/v1/spread/premiums?threshold=2");
+  $("#scaninfo").textContent = "Последний скан: " + (data.latest_scan || "—") + " UTC · событий: " + data.count;
+  const rows = data.premiums.map(p => `<tr>
+    <td>${esc(p.symbol)}</td>
+    <td class="${p.spread_pct >= 4 ? "big" : "pos"}">${p.spread_pct >= 0 ? "+" : ""}${fmt(p.spread_pct, 2)}%</td>
+    <td>${p.spot}</td><td>${p.futures}</td>
+    <td>${fmt((p.cost_rt || 0) * 100, 2)}%</td>
+    <td>${p.tradable ? '<span class="pos">торгуемо</span>' : '<span class="neg">rejected_by_cost</span>'}</td></tr>`).join("");
+  $("#premiums tbody").innerHTML = rows;
+  $("#noprem").style.display = data.count ? "none" : "block";
+}
+
+async function loadAll() {
+  if (paperInFlight) return;
+  const tg = getTg();
+  if (!tg || !tg.initData) {
+    $("#authwarning").style.display = "block";
+    return;
+  }
+  paperInFlight = true;
+  if (paperTimer) clearTimeout(paperTimer);
+  const tasks = [
+    [loadSlots, "#slots"], [loadPremiums, "#scaninfo"],
+    [loadRadarLb, "#radar"], [drawEquity, "#scaninfo"]
+  ];
+  try {
+    for (const [loader, target] of tasks) {
+      try { await loader(); }
+      catch (e) {
+        if (e.message === "401") { $("#authwarning").style.display = "block"; return; }
+        $(target).textContent = "Данные временно недоступны. Повторим через минуту.";
+      }
+    }
+    try {
+      const health = await api("/api/v1/health");
+      if (health.kill_switch && health.kill_switch !== "OK") {
+        $("#killbanner").style.display = "block";
+        $("#killreason").textContent = (health.kill_switch.reasons || []).join("; ");
+      } else {
+        $("#killbanner").style.display = "none";
+      }
+    } catch (e) { $("#killbanner").style.display = "none"; }
+  } finally {
+    paperInFlight = false;
+    paperTimer = setTimeout(loadAll, 60000);
+  }
+}
+
+async function drawEquity() {
+  const data = await api("/api/v1/equity_curve?slot=base");
+  const pts = data.points;
+  const c = $("#eqcanvas"), ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (!pts.length) {
+    ctx.fillStyle = "#8b949e"; ctx.fillText("Данных пока нет", 20, 80);
+    return;
+  }
+  const values = pts.map(p => p.equity);
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = Math.max(max - min, 0.01);
+  ctx.strokeStyle = "#3fb950"; ctx.lineWidth = 2; ctx.beginPath();
+  pts.forEach((p, i) => {
+    const x = 20 + i * (c.width - 40) / Math.max(pts.length - 1, 1);
+    const y = c.height - 20 - (p.equity - min) / range * (c.height - 40);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.stroke();
+  ctx.fillStyle = "#8b949e";
+  ctx.fillText("max " + max.toFixed(2), c.width - 80, 20);
+  ctx.fillText("min " + min.toFixed(2), c.width - 80, c.height - 10);
+}
+
+async function loadRadarLb() {
+  const radar = await api("/api/v1/radar");
+  $("#radar").innerHTML = radar.anomalies.length
+    ? radar.anomalies.map(a => `<div><b>${esc(a.symbol)}</b>: ${a.flags.map(esc).join(", ")}</div>`).join("")
+    : '<span class="empty">Аномалий нет — рынок спокоен.</span>';
+  const lb = await api("/api/v1/leaderboard");
+  $("#lb tbody").innerHTML = lb.strategies.map((s, i) => `<tr>
+    <td>${i + 1}</td><td>${esc(s.name)}</td><td>${s.pf ?? "—"}</td>
+    <td>${s.dd === null ? "—" : (s.dd * 100).toFixed(1) + "%"}</td>
+    <td>${s.trades}</td><td>${esc(s.verdict)}</td>
+    <td>${s.config ? `<button onclick='fork(${JSON.stringify(s.config)})'>Fork</button>` : "—"}</td></tr>`).join("");
+}
+
+function fork(config) {
+  const yaml = "strategy: " + config.strategy + "\nsymbols:\n" +
+    config.symbols.map(s => "  - " + s).join("\n") + "\n";
+  const blob = new Blob([yaml], {type: "text/yaml"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ark_strategy_fork.yaml";
+  a.click();
+}
+
+async function loadUat() {
+  $("#uatbox").style.display = "block";
+  $("#uat").textContent = "Генерирую отчёт…";
+  try {
+    $("#uat").textContent = await api("/api/v1/uat/report", true);
+  } catch (e) { $("#uat").textContent = "Не удалось загрузить отчёт. Попробуйте позже."; }
+}
+
+async function loadExplain() {
+  $("#explainbox").style.display = "block";
+  $("#explain").textContent = "Спрашиваю AI-копилота…";
+  try {
+    const r = await api("/api/v1/explain/latest");
+    $("#explain").textContent = r.text;
+  } catch (e) { $("#explain").textContent = "Сервис временно недоступен. Попробуйте позже."; }
+}
+
+function bootPaper() {
+  const tg = getTg();
+  if (tg) { tg.ready(); tg.expand(); }
+  if (tg && tg.initData) loadAll();
+  else $("#authwarning").style.display = "block";
+}
+const insideTelegram = location.hash.includes("tgWebAppData") || "TelegramWebviewProxy" in window;
+if (insideTelegram && !getTg()) {
+  const script = document.createElement("script");
+  script.src = "https://telegram.org/js/telegram-web-app.js";
+  script.onload = bootPaper;
+  script.onerror = bootPaper;
+  document.head.appendChild(script);
+} else {
+  bootPaper();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && paperTimer) clearTimeout(paperTimer);
+  else if (!document.hidden) loadAll();
+});
+window.addEventListener("pagehide", () => { if (paperTimer) clearTimeout(paperTimer); });
+</script>
+</body>
+</html>
