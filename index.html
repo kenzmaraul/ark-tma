@@ -1,223 +1,83 @@
 <!DOCTYPE html>
-<!-- ARK raw-asset deploy 2026-11-09 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ARK Bot — Дашборд</title>
-<!-- Telegram WebApp script injects dynamically in src/main.js only when the
-     page runs inside Telegram (hash #tgWebAppData / TelegramWebviewProxy),
-     so plain browsers never make a doomed request to telegram.org. -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#1a202c; --card:#2d3748; --card-2:#232b3a;
-  --text:#e2e8f0; --muted:#a0aec0;
-  --up:#48bb78; --down:#ef4444; --line:#63b3ed;
-  --radius:14px; --gap:12px;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-html{-webkit-text-size-adjust:100%}
-body{
-  background:var(--bg); color:var(--text);
-  font-family:'Manrope','Segoe UI',sans-serif; font-size:16px; line-height:1.6;
-  min-height:100dvh; padding-bottom:calc(72px + env(safe-area-inset-bottom));
-}
-.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
-header{
-  position:sticky; top:0; z-index:10; background:var(--bg);
-  display:flex; align-items:center; gap:10px;
-  padding:14px 16px 10px; border-bottom:1px solid var(--card-2);
-}
-header h1{font-size:17px; font-weight:800; letter-spacing:.2px; flex:1}
-.dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none;transition:background .2s}
-.dot.ok{background:var(--up)} .dot.bad{background:var(--down)}
-#refresh-btn{
-  min-width:44px;min-height:44px;border:0;border-radius:12px;background:var(--card);
-  color:var(--text);cursor:pointer;display:grid;place-items:center;transition:transform .15s,background .2s;
-}
-#refresh-btn:hover{background:#374357} #refresh-btn:active{transform:scale(.94)}
-#refresh-btn:focus-visible{outline:2px solid var(--line);outline-offset:2px}
-#refresh-btn svg{width:20px;height:20px}
-#refresh-btn.spin svg{animation:spin .8s linear}
-@keyframes spin{to{transform:rotate(360deg)}}
-#offline-banner{
-  display:none; background:var(--down); color:#fff; text-align:center;
-  padding:8px 12px; font-size:14px; font-weight:600;
-}
-#offline-banner.show{display:block}
-main{padding:16px; max-width:720px; margin:0 auto}
-.tab-panel{display:none}
-.tab-panel.active{display:block; animation:fadein .18s ease-out}
-@keyframes fadein{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
-@media (prefers-reduced-motion:reduce){.tab-panel.active{animation:none}#refresh-btn.spin svg{animation:none}}
-.card{
-  background:var(--card); border-radius:var(--radius); padding:16px;
-  margin-bottom:var(--gap);
-}
-.card h2{font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px}
-.tiles{display:grid; grid-template-columns:1fr 1fr; gap:8px}
-.tile{border-radius:12px; padding:12px; background:var(--card-2); border:1px solid var(--card-2)}
-.tile .t-k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
-.tile .t-v{font-size:15px; font-weight:700; margin-top:4px; line-height:1.25}
-.tile .t-s{font-size:11px; color:var(--muted); margin-top:3px}
-.tile.ok{border-color:rgba(72,187,120,.45); background:rgba(72,187,120,.08)}
-.tile.warn{border-color:rgba(236,201,75,.45); background:rgba(236,201,75,.08)}
-.tile.bad{border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.1)}
-.tile.info{border-color:rgba(99,179,237,.45); background:rgba(99,179,237,.08)}
-.tile.dead{border-color:rgba(160,174,192,.3); background:rgba(160,174,192,.06); opacity:.7}
-.big{font-size:28px; font-weight:800; line-height:1.2}
-.up{color:var(--up)} .down{color:var(--down)} .muted{color:var(--muted)}
-.row{display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:6px 0; border-bottom:1px solid var(--card-2)}
-.row:last-child{border-bottom:0}
-.row .k{color:var(--muted); font-size:14px}
-.row .v{font-weight:600; text-align:right}
-.badge{display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700}
-.badge.ok{background:rgba(72,187,120,.16); color:var(--up)}
-.badge.warn{background:rgba(236,201,75,.16); color:#ecc94b}
-.badge.bad{background:rgba(239,68,68,.16); color:var(--down)}
-.badge.info{background:rgba(99,179,237,.16); color:var(--line)}
-table{width:100%; border-collapse:collapse; font-size:14px}
-th{color:var(--muted); font-weight:600; text-align:right; padding:8px 6px; font-size:12px; text-transform:uppercase; letter-spacing:.05em}
-th:first-child,td:first-child{text-align:left}
-td{padding:10px 6px; border-top:1px solid var(--card-2); text-align:right}
-.empty,.error-box{padding:22px 12px; text-align:center; color:var(--muted); font-size:14px}
-.error-box{color:var(--down)}
-.skel{height:14px; border-radius:6px; background:var(--card-2); margin:8px 0; animation:pulse 1.2s ease-in-out infinite}
-@keyframes pulse{50%{opacity:.5}}
-.bars{display:flex; align-items:flex-end; gap:6px; height:110px; padding-top:8px}
-.bar-wrap{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; height:100%; justify-content:flex-end}
-.bar{width:100%; max-width:34px; border-radius:5px 5px 0 0; min-height:2px; transition:height .25s ease-out}
-.bar.pos{background:var(--up)} .bar.neg{background:var(--down)}
-.bar-label{font-size:10px; color:var(--muted); white-space:nowrap}
-nav{
-  position:fixed; left:0; right:0; bottom:0; z-index:10;
-  background:var(--card); border-top:1px solid var(--card-2);
-  display:flex; padding-bottom:env(safe-area-inset-bottom);
-}
-nav button{
-  flex:1; min-height:60px; border:0; background:none; color:var(--muted);
-  cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
-  font-family:inherit; font-size:11px; font-weight:600; transition:color .15s,background .2s;
-}
-nav button svg{width:22px;height:22px}
-nav button.active{color:var(--line)}
-nav button:hover{background:var(--card-2)}
-nav button:focus-visible{outline:2px solid var(--line);outline-offset:-2px}
-#auth-panel{display:none}
-#auth-panel.show{display:block}
-#auth-panel input{
-  width:100%; min-height:48px; border:1px solid var(--card-2); border-radius:10px;
-  background:var(--bg); color:var(--text); padding:10px 14px; font-size:15px; font-family:inherit; margin-bottom:10px;
-}
-#auth-panel input:focus-visible{outline:2px solid var(--line);outline-offset:1px}
-.btn{
-  min-height:48px; border:0; border-radius:10px; padding:10px 18px; font-size:15px; font-weight:700;
-  cursor:pointer; font-family:inherit; transition:transform .15s,background .2s;
-}
-.btn:active{transform:scale(.97)}
-.btn:focus-visible{outline:2px solid var(--line);outline-offset:2px}
-.btn.primary{background:var(--line); color:#10141c}
-#auth-panel .btn.primary{width:100%}
-.btn.primary:hover{background:#7cc0f0}
-.btn.ghost{background:none; color:var(--muted)}
-.toolbar .btn{min-height:44px; padding:8px 16px}
-select{
-  min-height:44px; border:1px solid var(--card-2); border-radius:10px; background:var(--card);
-  color:var(--text); padding:8px 12px; font-size:14px; font-family:inherit;
-}
-select:focus-visible{outline:2px solid var(--line);outline-offset:1px}
-.toolbar{display:flex; gap:10px; align-items:center; margin-bottom:var(--gap); flex-wrap:wrap}
-.hint{font-size:12px; color:var(--muted)}
-</style>
+<meta name="theme-color" content="#111715">
+<title>ARK Signal — Командный центр</title>
+<link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-<header>
-  <span class="dot" id="conn-dot" title="Соединение с API"></span>
-  <h1>ARK Bot · Дашборд</h1>
+<body class="app-body">
+<header class="app-header">
+  <span id="conn-dot" title="Соединение с API" aria-hidden="true"></span>
+  <span class="brand" aria-label="ARK Signal">
+    <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="12" stroke="currentColor"/><ellipse cx="16" cy="16" rx="16" ry="6" transform="rotate(-35 16 16)" stroke="currentColor"/><circle cx="16" cy="16" r="3" fill="currentColor"/></svg>
+    <span>ARK / SIGNAL<small>COMMAND CENTER</small></span>
+  </span>
+  <h1>Командный центр</h1>
+  <span class="mode-chip">PAPER · READ-ONLY</span>
   <button id="refresh-btn" type="button" aria-label="Обновить все данные">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
   </button>
 </header>
-<div id="offline-banner">Нет соединения с сетью. Проверьте интернет.</div>
+<div id="offline-banner" role="status">Нет соединения с сетью. Проверьте интернет.</div>
 
-<main>
-  <div id="auth-panel" class="card">
+<main class="dashboard-main">
+  <div id="auth-panel" class="card" role="alert">
     <h2>Требуется Telegram</h2>
     <p class="hint">Откройте этот дашборд через кнопку ARK Bot в Telegram. API-токены и биржевые ключи в публичной странице не используются.</p>
   </div>
 
-  <!-- STATUS -->
-  <section class="tab-panel" id="tab-status" aria-label="Статус">
+  <section class="tab-panel active" id="tab-status" aria-label="Статус">
     <div class="card" id="status-night"><h2>Ночной контроль</h2><div class="skel"></div><div class="skel"></div></div>
     <div class="card" id="status-health"><h2>Состояние бота</h2><div class="skel"></div><div class="skel"></div></div>
     <div class="card" id="status-exchanges"><h2>Биржи</h2><div class="skel"></div></div>
     <div class="card" id="status-signals"><h2>Последние сигналы</h2><div class="skel"></div></div>
   </section>
 
-  <!-- POSITIONS -->
   <section class="tab-panel" id="tab-positions" aria-label="Позиции">
     <div class="toolbar">
-      <select id="pos-exchange" aria-label="Фильтр по бирже">
-        <option value="">Все биржи</option>
-        <option value="gate">Gate.io</option>
-        <option value="htx">HTX</option>
-      </select>
+      <select id="pos-exchange" aria-label="Фильтр по бирже"><option value="">Все биржи</option><option value="gate">Gate.io</option><option value="htx">HTX</option></select>
       <span class="hint" id="pos-count"></span>
     </div>
     <div id="positions-list"><div class="card"><div class="skel"></div><div class="skel"></div></div></div>
   </section>
 
-  <!-- PNL -->
   <section class="tab-panel" id="tab-pnl" aria-label="Прибыль и убытки">
     <div class="toolbar" id="pnl-periods" role="group" aria-label="Период"></div>
     <div class="card" id="pnl-overall"><h2>PnL</h2><div class="skel"></div><div class="skel"></div></div>
     <div class="card" id="pnl-daily"><h2>PnL по дням</h2><div class="skel"></div></div>
   </section>
 
-  <!-- SPREADS -->
   <section class="tab-panel" id="tab-spreads" aria-label="Спреды">
     <div class="toolbar">
-      <select id="spread-min" aria-label="Минимальный спред">
-        <option value="0">Все спреды</option>
-        <option value="0.1" selected>от 0.1%</option>
-        <option value="0.3">от 0.3%</option>
-        <option value="0.5">от 0.5%</option>
-      </select>
+      <select id="spread-min" aria-label="Минимальный спред"><option value="0">Все спреды</option><option value="0.1" selected>от 0.1%</option><option value="0.3">от 0.3%</option><option value="0.5">от 0.5%</option></select>
       <span class="hint" id="spread-updated"></span>
     </div>
     <div class="card"><h2>Спреды Gate.io / HTX</h2><div id="spreads-table"><div class="skel"></div><div class="skel"></div></div></div>
   </section>
 
-  <!-- RISK -->
   <section class="tab-panel" id="tab-risk" aria-label="Риски">
     <div class="card" id="risk-overall"><h2>Риск-метрики</h2><div class="skel"></div><div class="skel"></div></div>
     <div class="card" id="risk-intents"><h2>Последние ордер-интенты</h2><div class="skel"></div></div>
   </section>
 </main>
 
-<nav aria-label="Разделы дашборда">
-  <button type="button" data-tab="status" class="active" aria-label="Статус">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-    Статус
+<nav aria-label="Разделы дашборда" role="tablist">
+  <button type="button" data-tab="status" class="active" role="tab" aria-selected="true" aria-label="Статус">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Статус
   </button>
-  <button type="button" data-tab="positions" aria-label="Позиции">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-    Позиции
+  <button type="button" data-tab="positions" role="tab" aria-selected="false" aria-label="Позиции">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Позиции
   </button>
-  <button type="button" data-tab="pnl" aria-label="PnL">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>
-    PnL
+  <button type="button" data-tab="pnl" role="tab" aria-selected="false" aria-label="PnL">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>PnL
   </button>
-  <button type="button" data-tab="spreads" aria-label="Спреды">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="8 7 3 12 8 17"/><polyline points="16 7 21 12 16 17"/><line x1="13" y1="4" x2="11" y2="20"/></svg>
-    Спреды
+  <button type="button" data-tab="spreads" role="tab" aria-selected="false" aria-label="Спреды">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="8 7 3 12 8 17"/><polyline points="16 7 21 12 16 17"/><line x1="13" y1="4" x2="11" y2="20"/></svg>Спреды
   </button>
-  <button type="button" data-tab="risk" aria-label="Риски">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-    Риски
+  <button type="button" data-tab="risk" role="tab" aria-selected="false" aria-label="Риски">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Риски
   </button>
 </nav>
 <script src="/main.js"></script>

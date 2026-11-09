@@ -322,8 +322,11 @@ function stopPolling() {
 }
 function switchTab(tab) {
   activeTab = tab;
-  document.querySelectorAll("nav button").forEach((b) =>
-    b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll("nav button").forEach((b) => {
+    const selected = b.dataset.tab === tab;
+    b.classList.toggle("active", selected);
+    b.setAttribute("aria-selected", String(selected));
+  });
   document.querySelectorAll(".tab-panel").forEach((p) =>
     p.classList.toggle("active", p.id === "tab-" + tab));
   startPolling(tab);
@@ -331,12 +334,30 @@ function switchTab(tab) {
 function refreshAll() {
   const btn = $("#refresh-btn");
   btn.classList.add("spin");
-  setTimeout(() => btn.classList.remove("spin"), 900);
+  setTimeout(() => btn.classList.remove("spin"), 700);
   startPolling(activeTab);
 }
 
-document.querySelectorAll("nav button").forEach((b) =>
-  b.addEventListener("click", () => switchTab(b.dataset.tab)));
+const tabButtons = Array.from(document.querySelectorAll("nav button"));
+tabButtons.forEach((b, index) => {
+  b.addEventListener("click", () => {
+    switchTab(b.dataset.tab);
+    const tg = getTg();
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+  });
+  b.addEventListener("keydown", (event) => {
+    let target = null;
+    if (event.key === "ArrowRight") target = (index + 1) % tabButtons.length;
+    if (event.key === "ArrowLeft") target = (index - 1 + tabButtons.length) % tabButtons.length;
+    if (event.key === "Home") target = 0;
+    if (event.key === "End") target = tabButtons.length - 1;
+    if (target !== null) {
+      event.preventDefault();
+      switchTab(tabButtons[target].dataset.tab);
+      tabButtons[target].focus();
+    }
+  });
+});
 $("#refresh-btn").addEventListener("click", refreshAll);
 $("#pos-exchange").addEventListener("change", () => startPolling("positions"));
 $("#spread-min").addEventListener("change", () => startPolling("spreads"));
