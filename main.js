@@ -28,9 +28,16 @@ const fmtTime = (iso) => {
   return isNaN(d) ? "—" : d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 };
 
+let previousConn = null;
 function setConn(ok) {
   const dot = $("#conn-dot");
   dot.className = "dot " + (ok === null ? "" : ok ? "ok" : "bad");
+  if (ok !== null && previousConn !== ok) {
+    dot.classList.remove("pulse");
+    void dot.offsetWidth;
+    dot.classList.add("pulse");
+  }
+  previousConn = ok;
 }
 
 async function api(path) {

@@ -86,19 +86,37 @@ button, [role='button'] { cursor: pointer; }
 .hero-lead { max-width: 610px; margin-top: 28px; color: var(--muted); font-size: clamp(17px, 1.6vw, 21px); line-height: 1.55; }
 .hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 24px; margin-top: 36px; }
 .button-primary {
+  position: relative; overflow: hidden;
   display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 52px;
   padding: 0 22px; border: 1px solid var(--accent); border-radius: 8px;
   background: var(--accent); color: var(--bg); font-weight: 700;
   transition: transform 160ms ease-out, opacity 160ms ease-out;
 }
+.button-primary::after {
+  content: ''; position: absolute; inset: 0 auto 0 -35%; width: 28%;
+  background: linear-gradient(90deg, transparent, oklch(0.98 0.02 155 / .6), transparent);
+  transform: skewX(-18deg); transition: transform 220ms ease-out; pointer-events: none;
+}
+.button-primary:hover::after, .button-primary:focus-visible::after { transform: translateX(520%) skewX(-18deg); }
 .button-primary:hover { transform: translateY(-2px); text-decoration: none; opacity: .9; }
 .button-primary:active { transform: translateY(0) scale(.98); }
 .text-link { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
 .hero-note { margin-top: 16px; color: var(--text-3); font: 11px/1.6 var(--font-mono); }
-.hero-visual { position: relative; min-height: 520px; display: flex; align-items: flex-end; }
+.hero-visual { position: relative; min-height: 520px; display: flex; align-items: flex-end; overflow: clip; }
 .orbital-frame {
   position: absolute; inset: 0 -12vw 0 -60px; pointer-events: none;
   background: radial-gradient(circle at 50% 45%, oklch(0.24 0.025 155 / .55), transparent 52%);
+}
+.signal-beam {
+  position: absolute; left: 12%; top: 4%; width: 1px; height: 34%; z-index: 1;
+  background: linear-gradient(to bottom, transparent, var(--accent), transparent);
+  opacity: 0; transform: translateY(-70%); pointer-events: none;
+  animation: signal-beam 4.8s ease-out 2;
+}
+@keyframes signal-beam {
+  0%, 12% { opacity: 0; transform: translateY(-70%); }
+  28%, 55% { opacity: .45; }
+  82%, 100% { opacity: 0; transform: translateY(360%); }
 }
 #orbital-canvas { width: 100%; height: 100%; display: block; opacity: .85; }
 .telemetry {
@@ -120,7 +138,9 @@ button, [role='button'] { cursor: pointer; }
 .section-content h2 { max-width: 680px; font-size: clamp(32px, 4vw, 52px); line-height: 1.06; letter-spacing: -.04em; }
 .section-content > p { max-width: 680px; margin-top: 20px; color: var(--muted); font-size: 18px; }
 .feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 40px; background: var(--border); }
-.feature { padding: 26px; background: var(--bg); }
+.feature { padding: 26px; background: var(--bg); transition: transform 240ms ease-out, opacity 240ms ease-out; }
+.reveal-ready .feature { opacity: .001; transform: translateY(12px); }
+.reveal-ready .feature.is-visible { opacity: 1; transform: none; }
 .feature svg { width: 24px; height: 24px; color: var(--accent); margin-bottom: 20px; }
 .feature h3 { font-size: 18px; margin-bottom: 8px; }
 .feature p { color: var(--muted); font-size: 14px; }
@@ -142,9 +162,14 @@ button, [role='button'] { cursor: pointer; }
   backdrop-filter: blur(16px);
 }
 .app-header h1 { flex: 1; font-size: 16px; letter-spacing: -.01em; }
-#conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
+#conn-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
 #conn-dot.ok { background: var(--up); }
 #conn-dot.bad { background: var(--down); }
+#conn-dot.pulse::after {
+  content: ''; position: absolute; inset: -4px; border: 1px solid currentColor; border-radius: 50%;
+  animation: api-pulse 600ms ease-out 1;
+}
+@keyframes api-pulse { from { opacity: .65; transform: scale(.65); } to { opacity: 0; transform: scale(1.8); } }
 #refresh-btn {
   min-width: 44px; min-height: 44px; border: 1px solid var(--border); border-radius: 9px;
   background: var(--surface); color: var(--text); display: grid; place-items: center;
@@ -164,9 +189,10 @@ button, [role='button'] { cursor: pointer; }
 .card {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 18px; margin-bottom: var(--gap);
-  transition: border-color 150ms ease-out;
+  transition: border-color 150ms ease-out, transform 120ms ease-out;
 }
 .card:hover { border-color: var(--text-3); }
+.card:active { transform: scale(.995); border-color: var(--mint-dim); }
 .card h2 { margin-bottom: 12px; color: var(--muted); font: 600 11px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tile { padding: 14px; background: var(--card-2); border: 1px solid var(--border); border-radius: 10px; }
